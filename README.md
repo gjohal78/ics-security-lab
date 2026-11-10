@@ -13,7 +13,7 @@ container goes after it over Modbus/TCP, and Suricata + Zeek watch the traffic.
 plc/         PLC program (Structured Text)
 simulator/   Python water-tank simulator (Modbus client)
 hmi/         Web HMI
-attacker/    Attacker container
+attacker/    Attack scripts (recon, pump override, sensor spoof, replay) - see attacker/README.md SAFETY note
 detection/   Suricata rules/logs, Zeek logs
 docs/        Architecture and write-ups
 ```
@@ -36,7 +36,7 @@ from the host network namespace (works on Linux and Docker Desktop).
 
 ## Status
 
-🚧 Scaffolding. Simulator done; HMI backend done (web page still to build); attacker is a stub.
+🚧 Scaffolding. Simulator, HMI and attacker scripts done.
 
 ## License
 

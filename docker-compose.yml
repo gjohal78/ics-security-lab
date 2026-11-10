@@ -62,6 +62,8 @@ services:
     build: ./attacker
     container_name: attacker
     restart: unless-stopped
+    # Raw sockets for scapy (ARP sweep in recon.py, sniffing in replay.py).
+    cap_add: [NET_RAW, NET_ADMIN]
     networks:
       ics-net:
         ipv4_address: 172.28.0.66
