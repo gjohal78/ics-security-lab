@@ -16,7 +16,7 @@ HMI=172.30.2.30          # supervisory
 MODBUS_PORT=502
 
 echo "[firewall] enabling IPv4 forwarding"
-sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || echo 1 > /proc/sys/net/ipv4/ip_forward
+sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || echo "[firewall] ip_forward already set by compose sysctl"
 
 echo "[firewall] resetting tables"
 iptables -F
@@ -72,6 +72,6 @@ iptables -t nat -S POSTROUTING
 echo "[firewall] up. Reporting blocked-packet counts every 15s (also see 'ZONE-DROP' in host dmesg)."
 while true; do
     sleep 15
-    DROPPED=$(iptables -nvxL ZONE-DROP 2>/dev/null | awk '/DROP/{print $1; exit}')
+    DROPPED=$(iptables -nvxL ZONE-DROP 2>/dev/null | awk '$3=="DROP"{print $1; exit}')
     echo "[firewall $(date -u +%H:%M:%S)] packets blocked by zone policy: ${DROPPED:-0}"
 done

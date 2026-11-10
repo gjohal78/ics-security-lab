@@ -87,7 +87,8 @@ services:
     cap_add: [NET_ADMIN, NET_RAW, SYS_NICE]
     command: -i br-sup -S /etc/suricata/rules/segmented.rules --set app-layer.protocols.modbus.enabled=yes
     volumes:
-      - ./detection/suricata/rules:/etc/suricata/rules:ro
+      # NOT :ro — the image entrypoint chowns /etc/suricata and exits if it cannot.
+      - ./detection/suricata/rules:/etc/suricata/rules
       - ./detection/suricata/logs:/var/log/suricata
 
   zeek:

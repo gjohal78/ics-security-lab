@@ -27,3 +27,6 @@ plc/tests/.build/
 
 # Scratch output from AI assistant sessions
 Claude outputs/
+
+# Segmented-lab diagnostic scratch
+seg-diag.txt
