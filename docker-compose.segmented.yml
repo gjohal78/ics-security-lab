@@ -1,0 +1,147 @@
+# ics-security-lab — SEGMENTED topology (zones & conduits).
+#
+# Three isolated zones, with a firewall container routing between them and
+# enforcing a single conduit policy: the supervisory HMI may READ Modbus from
+# the control PLC, nothing else crosses. See docs/architecture.md.
+#
+#   control      172.30.1.0/24   openplc .10, simulator .20     (firewall .2)
+#   supervisory  172.30.2.0/24   hmi .30, sensors (host netns)  (firewall .2)
+#   corporate    172.30.3.0/24   attacker .66                   (firewall .2)
+#
+# This file is opt-in and does not replace docker-compose.yml:
+#   docker compose -f docker-compose.segmented.yml up -d --build
+#
+# NOTE: this topology has not been run end-to-end yet — validate the firewall
+# conduit before relying on it (see docs/architecture.md "Running it").
+
+name: ics-security-lab-segmented
+
+services:
+  # --- Firewall / router between the three zones --------------------------------
+  firewall:
+    build: ./firewall
+    image: ics-lab/firewall:local
+    container_name: fw
+    restart: unless-stopped
+    cap_add: [NET_ADMIN, NET_RAW]
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    networks:
+      control:     { ipv4_address: 172.30.1.2 }
+      supervisory: { ipv4_address: 172.30.2.2 }
+      corporate:   { ipv4_address: 172.30.3.2 }
+
+  # --- Control zone -------------------------------------------------------------
+  openplc:
+    build:
+      context: https://github.com/thiagoralves/OpenPLC_v3.git
+    image: ics-lab/openplc:local
+    container_name: openplc
+    restart: unless-stopped
+    networks:
+      control: { ipv4_address: 172.30.1.10 }
+    ports:
+      - "127.0.0.1:8080:8080"
+    expose:
+      - "502"
+    volumes:
+      - openplc-data:/docker_persistent
+
+  simulator:
+    build: ./simulator
+    container_name: simulator
+    restart: unless-stopped
+    depends_on: [openplc]
+    environment:
+      PLC_HOST: openplc          # resolves inside the control zone via Docker DNS
+      PLC_PORT: "502"
+      PUMP_COIL: "0"
+      LEVEL_REGISTER: "1024"
+    networks:
+      control: { ipv4_address: 172.30.1.20 }
+
+  # --- Supervisory zone ---------------------------------------------------------
+  hmi:
+    build: ./hmi
+    container_name: hmi
+    restart: unless-stopped
+    depends_on: [firewall, openplc]
+    # root so the zone-route entrypoint can program the route; gunicorn then
+    # runs in-process. (In the flat lab the HMI stays non-root.)
+    user: root
+    cap_add: [NET_ADMIN]
+    environment:
+      PLC_HOST: "172.30.1.10"    # the PLC by IP: the HMI can't DNS across zones
+      PLC_PORT: "502"
+      ZONE_GW: "172.30.2.2"                 # firewall in the supervisory zone
+      ZONE_PEER_NETS: "172.30.1.0/24"       # reach the control zone through it
+    networks:
+      supervisory: { ipv4_address: 172.30.2.30 }
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  # Sensors sit in the supervisory zone but sniff the bridge from the host
+  # netns (a container on a bridge only sees its own traffic). From here they
+  # watch the HMI<->PLC conduit; the attacker, blocked at the firewall, shows up
+  # in the firewall's logs rather than here (see docs/architecture.md).
+  suricata:
+    image: jasonish/suricata:latest
+    container_name: suricata
+    restart: unless-stopped
+    network_mode: host
+    cap_add: [NET_ADMIN, NET_RAW, SYS_NICE]
+    command: -i br-sup -S /etc/suricata/rules/segmented.rules --set app-layer.protocols.modbus.enabled=yes
+    volumes:
+      - ./detection/suricata/rules:/etc/suricata/rules:ro
+      - ./detection/suricata/logs:/var/log/suricata
+
+  zeek:
+    image: zeek/zeek:latest
+    container_name: zeek
+    restart: unless-stopped
+    network_mode: host
+    cap_add: [NET_ADMIN, NET_RAW]
+    working_dir: /logs
+    command: zeek -C -i br-sup local /scripts/lab.zeek
+    volumes:
+      - ./detection/zeek/logs:/logs
+      - ./detection/zeek/scripts:/scripts:ro
+
+  # --- Corporate zone -----------------------------------------------------------
+  attacker:
+    build: ./attacker
+    container_name: attacker
+    restart: unless-stopped
+    depends_on: [firewall]
+    cap_add: [NET_RAW, NET_ADMIN]
+    environment:
+      PLC_HOST: "172.30.1.10"               # target the PLC by IP (no cross-zone DNS)
+      LAB_SUBNET: "172.30.0.0/16"           # guard: allow targeting any lab zone
+      ARP_SUBNET: "172.30.3.0/24"           # recon sweeps only its own zone
+      ZONE_GW: "172.30.3.2"                 # firewall in the corporate zone
+      ZONE_PEER_NETS: "172.30.1.0/24 172.30.2.0/24"
+    networks:
+      corporate: { ipv4_address: 172.30.3.66 }
+
+networks:
+  control:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: br-ctrl
+    ipam:
+      config: [{ subnet: 172.30.1.0/24 }]
+  supervisory:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: br-sup
+    ipam:
+      config: [{ subnet: 172.30.2.0/24 }]
+  corporate:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: br-corp
+    ipam:
+      config: [{ subnet: 172.30.3.0/24 }]
+
+volumes:
+  openplc-data:

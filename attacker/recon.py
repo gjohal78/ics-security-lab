@@ -15,16 +15,20 @@ import socket
 
 from pymodbus.client import ModbusTcpClient
 
-from lab_target import (LAB_SUBNET, LEVEL_REG, MODBUS_UNIT, PLC_PORT, log,
+from lab_target import (ARP_SUBNET, LEVEL_REG, MODBUS_UNIT, PLC_PORT, log,
                         resolve_plc)
 
 
 def arp_sweep() -> list[tuple[str, str]]:
-    """Find live hosts on the lab subnet with an ARP broadcast sweep."""
-    log(f"ARP sweep of {LAB_SUBNET} ...")
+    """Find live hosts on the local subnet with an ARP broadcast sweep.
+
+    ARP does not cross a router, so in the segmented lab this only ever sees the
+    attacker's own zone — which is the point: segmentation hides the rest.
+    """
+    log(f"ARP sweep of {ARP_SUBNET} ...")
     try:
         from scapy.all import ARP, Ether, srp
-        ans, _ = srp(Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=str(LAB_SUBNET)),
+        ans, _ = srp(Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=str(ARP_SUBNET)),
                      timeout=3, verbose=0)
     except (OSError, PermissionError) as exc:
         log(f"  ARP sweep needs raw-socket privileges (NET_RAW): {exc}")

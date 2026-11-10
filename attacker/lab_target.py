@@ -18,7 +18,11 @@ from datetime import datetime
 # --- Target (overridable by env, but still checked against LAB_SUBNET) --------
 PLC_HOST = os.getenv("PLC_HOST", "openplc")
 PLC_PORT = int(os.getenv("PLC_PORT", "502"))
+# LAB_SUBNET guards the target (the PLC must resolve inside it). ARP_SUBNET is
+# the range recon.py sweeps; it defaults to LAB_SUBNET but is set separately in
+# the segmented lab, where the attacker's own zone differs from the PLC's.
 LAB_SUBNET = ipaddress.ip_network(os.getenv("LAB_SUBNET", "172.28.0.0/24"))
+ARP_SUBNET = ipaddress.ip_network(os.getenv("ARP_SUBNET", str(LAB_SUBNET)))
 MODBUS_UNIT = int(os.getenv("MODBUS_UNIT", "1"))
 
 # --- Modbus address map (see docs/architecture.md) ----------------------------
