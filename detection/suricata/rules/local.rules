@@ -16,9 +16,12 @@
 alert modbus !172.28.0.20 any -> 172.28.0.10 502 (msg:"ICS-LAB Unauthorized Modbus write (source is not the simulator)"; flow:to_server,established; modbus:access write; classtype:attempted-admin; sid:1000001; rev:1; metadata:attack unauthorized_write;)
 
 # 2) A WRITE to holding register 1024 (%MW0, the tank level) from any host other
-#    than the simulator — the sensor-spoofing attack specifically. Higher-
-#    specificity companion to rule 1; both fire on a level spoof.
-alert modbus !172.28.0.20 any -> 172.28.0.10 502 (msg:"ICS-LAB Level register spoof (write to %MW0 / holding 1024 from unauthorized host)"; flow:to_server,established; modbus:access write holding, address 1024; classtype:attempted-admin; sid:1000002; rev:1; metadata:attack sensor_spoof;)
+#    than the simulator — the sensor-spoofing attack specifically. Matched on the
+#    raw request bytes: Modbus protocol id 00 00 at offset 2, then FC6 (0x06) and
+#    register address 0x0400 (1024) at offset 7. (Suricata 8.0's modbus:address
+#    keyword did not match this, so we anchor on the PDU bytes, which is exact.)
+#    Higher-specificity companion to rule 1; both fire on a level spoof.
+alert tcp !172.28.0.20 any -> 172.28.0.10 502 (msg:"ICS-LAB Level register spoof (FC6 write to %MW0 / holding 1024 from unauthorized host)"; flow:to_server,established; content:"|00 00|"; offset:2; depth:2; content:"|06 04 00|"; offset:7; depth:3; classtype:attempted-admin; sid:1000002; rev:2; metadata:attack sensor_spoof;)
 
 # 3) A burst of writes from one non-simulator host: more than 15 write requests
 #    in 2 seconds. Flags rapid override/flooding (sensor_spoof hammers the

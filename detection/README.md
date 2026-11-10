@@ -64,12 +64,23 @@ alert modbus !172.28.0.20 any -> 172.28.0.10 502 ( \
 - `metadata:attack …` — a label surfaced in `eve.json`.
 
 ### Rule 2 — level-register spoof (sid 1000002)
-Same header as rule 1, but:
-- `modbus:access write holding, address 1024` — a write specifically to
-  **holding register 1024** (`%MW0`, the tank level). This is the sensor-spoof
-  signature. It is a stricter subset of rule 1, so a level spoof trips both — a
-  generic "unauthorized write" and the specific "someone is faking the level",
-  which is the one an operator cares about.
+Catches a write specifically to **holding register 1024** (`%MW0`, the tank
+level) — the sensor-spoof signature, the one an operator actually cares about.
+It is a stricter subset of rule 1, so a level spoof trips both.
+
+This one matches on the raw request bytes instead of the `modbus:` keyword,
+because Suricata 8.0's `modbus:access write holding, address 1024` did not
+match the traffic in testing (rule 1 fired thousands of times on the same
+packets; the address form fired zero). The byte match is exact:
+- `content:"|00 00|"; offset:2; depth:2;` — the Modbus **protocol id** (always
+  `00 00`) at bytes 2-3, confirming this is Modbus.
+- `content:"|06 04 00|"; offset:7; depth:3;` — at bytes 7-9, **function code
+  `06`** (write single register) followed by **address `04 00`** = 1024. A write
+  to any other register, or a coil write (FC5), has different bytes here and
+  won't match.
+
+(The rule header is `alert tcp …` rather than `alert modbus …` so the content
+matches against the raw TCP payload.)
 
 ### Rule 3 — write burst / flood (sid 1000003)
 Same as rule 1 (`modbus:access write` from non-simulator) plus:
