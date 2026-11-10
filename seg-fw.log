@@ -1,0 +1,13 @@
+firewall-1  | [firewall 21:40:08] packets blocked by zone policy: Chain
+firewall-1  | [firewall 21:40:23] packets blocked by zone policy: Chain
+firewall-1  | [firewall 21:40:38] packets blocked by zone policy: Chain
+firewall-1  | [firewall 21:40:53] packets blocked by zone policy: Chain
+firewall-1  | [firewall 21:41:08] packets blocked by zone policy: Chain
+firewall-1  | [firewall 21:41:23] packets blocked by zone policy: Chain
+attacker: running
+firewall: running
+hmi: running
+openplc: running
+simulator: running
+suricata: running
+zeek: running
