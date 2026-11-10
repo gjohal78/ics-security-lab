@@ -1,0 +1,2 @@
+# Pinned: pymodbus renamed `slave=` to `device_id=` in 3.x; sim.py uses device_id.
+pymodbus==3.16.2

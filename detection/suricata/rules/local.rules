@@ -1,0 +1,5 @@
+# Custom Suricata rules for ics-security-lab.
+# Loaded exclusively via `-S` in docker-compose.yml.
+#
+# Starter rule: alert on any Modbus/TCP connection from the attacker container.
+alert tcp 172.28.0.66 any -> 172.28.0.10 502 (msg:"ICS-LAB Attacker host talking Modbus to PLC"; flow:to_server,established; sid:1000001; rev:1;)

@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Detection output (keep the folders, ignore the logs)
+detection/suricata/logs/*
+!detection/suricata/logs/.gitkeep
+detection/zeek/logs/*
+!detection/zeek/logs/.gitkeep
+
+# Packet captures
+*.pcap
+*.pcapng
+
+# Local env / secrets
+.env
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# PLC test build output
+plc/tests/.build/

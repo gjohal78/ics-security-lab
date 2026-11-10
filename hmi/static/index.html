@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tank T-101 · HMI</title>
+<!--
+  ics-security-lab — operator HMI (read-only)
+
+  Polls GET /api/state and renders:
+    * a process graphic (inlet -> tank -> pump),
+    * an alarm panel (HH trip, high, low),
+    * a level trend with the pump state underneath.
+
+  Design notes
+  - Follows the "high-performance HMI" idea (ISA-101): the screen is mostly
+    grey, and colour is reserved for abnormal states, so an alarm is the
+    loudest thing on the screen.
+  - No external libraries, fonts or CDNs: the lab runs on isolated Docker
+    networks with no internet. CSS and JS are separate files because the
+    backend's Content-Security-Policy (default-src 'self') blocks inline code.
+  - Every value from the API is written with textContent (never innerHTML),
+    so a tampered response can't inject markup into the page.
+  - The HMI has no controls on purpose: it only reads.
+-->
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Tank T-101 — Level Control</h1>
+    <div class="sub">ics-security-lab · OpenPLC via Modbus/TCP · read-only view</div>
+  </div>
+  <div class="conn">
+    <span id="badge" class="badge"><span class="dot"></span><span id="badge-text">Connecting…</span></span>
+    <span id="age" class="num">—</span>
+  </div>
+</header>
+<div id="banner" role="alert"></div>
+
+<main>
+  <!-- Process graphic: inlet pipe -> tank -> outlet pipe -> pump -->
+  <section class="panel" id="process">
+    <h2>Process</h2>
+    <svg viewBox="0 0 520 300" role="img" aria-labelledby="proc-title">
+      <title id="proc-title">Tank level and pump status</title>
+      <!-- Inlet pipe (top left, flows into the tank) -->
+      <path d="M10 50 H180 V70" fill="none" stroke="var(--steel)" stroke-width="8" stroke-linejoin="round"/>
+      <text x="14" y="38" font-size="12" fill="var(--ink-3)">INLET FLOW</text>
+
+      <!-- Tank: wall, empty interior, and a liquid rect whose height we set from JS -->
+      <rect x="140" y="70" width="160" height="200" rx="6" fill="var(--liquid-bg)"/>
+      <clipPath id="tank-clip"><rect x="140" y="70" width="160" height="200" rx="6"/></clipPath>
+      <rect id="liquid" class="live" x="140" y="270" width="160" height="0"
+            fill="var(--liquid)" clip-path="url(#tank-clip)"/>
+      <rect x="140" y="70" width="160" height="200" rx="6" fill="none" stroke="var(--steel)" stroke-width="3"/>
+      <!-- Alarm threshold ticks get drawn here from CONFIG.marks -->
+      <g id="marks"></g>
+      <text x="220" y="292" font-size="12" fill="var(--ink-3)" text-anchor="middle">T-101</text>
+
+      <!-- Outlet pipe (bottom right, to the pump) -->
+      <path d="M300 250 H400" fill="none" stroke="var(--steel)" stroke-width="8"/>
+      <path d="M460 250 H515" fill="none" stroke="var(--steel)" stroke-width="8"/>
+
+      <!-- Pump symbol: circle with a triangle pointing in the flow direction -->
+      <g id="pump" class="live">
+        <circle id="pump-body" cx="430" cy="250" r="28" fill="var(--panel)" stroke="var(--steel)" stroke-width="3"/>
+        <path id="pump-arrow" d="M418 234 L446 250 L418 266 Z" fill="none" stroke="var(--steel)" stroke-width="3" stroke-linejoin="round"/>
+      </g>
+      <text x="430" y="200" font-size="12" fill="var(--ink-3)" text-anchor="middle">P-101</text>
+      <text id="pump-text" class="live" x="430" y="216" font-size="13" font-weight="700" fill="var(--ink-2)" text-anchor="middle">—</text>
+    </svg>
+
+    <div class="readouts">
+      <div class="readout">
+        <div class="label">Tank level</div>
+        <div class="live"><span id="level" class="value num">—</span><span class="unit" id="level-unit"></span></div>
+      </div>
+      <div class="readout">
+        <div class="label">Pump P-101</div>
+        <div class="live"><span id="pump-value" class="value">—</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Alarm panel -->
+  <section class="panel">
+    <h2>Alarms</h2>
+    <!-- .live: greys out with everything else when data is stale, so an old "Normal" isn't trusted -->
+    <ul class="alarms live" id="alarms" aria-live="assertive"></ul>
+    <p class="note">Alarm states come straight from the PLC. This screen only displays them.</p>
+  </section>
+
+  <!-- Trend: level on top, pump state as a strip under the same time axis -->
+  <section class="panel wide">
+    <h2>Level trend</h2>
+    <div class="trend-wrap">
+      <canvas id="trend" aria-label="Tank level over time, with pump running periods shown underneath"></canvas>
+      <div id="tooltip"></div>
+    </div>
+    <details>
+      <summary>Show recent samples as a table</summary>
+      <table>
+        <thead><tr><th>Time</th><th>Level</th><th>Pump</th></tr></thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </details>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,108 @@
+# ics-security-lab — Docker-based ICS security lab.
+#
+# SAFETY: this lab is for local, isolated use only. Nothing listens on your
+# LAN: the few published ports are bound to 127.0.0.1, and Modbus/TCP (502)
+# is never published to the host at all.
+
+name: ics-security-lab
+
+services:
+  # --- PLC ------------------------------------------------------------------
+  # Built straight from the official OpenPLC_v3 repo (it ships a root Dockerfile).
+  # Pin a commit later for reproducible builds, e.g. ...OpenPLC_v3.git#<sha>
+  openplc:
+    build:
+      context: https://github.com/thiagoralves/OpenPLC_v3.git
+    image: ics-lab/openplc:local
+    container_name: openplc
+    restart: unless-stopped
+    networks:
+      ics-net:
+        ipv4_address: 172.28.0.10
+    ports:
+      - "127.0.0.1:8080:8080"   # OpenPLC web UI (upload/start the PLC program)
+    expose:
+      - "502"                   # Modbus/TCP, reachable only inside ics-net
+    volumes:
+      - openplc-data:/docker_persistent   # PLC program, settings, DB survive restarts
+
+  # --- Process simulator -----------------------------------------------------
+  simulator:
+    build: ./simulator
+    container_name: simulator
+    restart: unless-stopped
+    depends_on: [openplc]
+    environment:
+      PLC_HOST: openplc
+      PLC_PORT: "502"
+      PUMP_COIL: "0"          # %QX0.0  pump command (PLC -> simulator)
+      LEVEL_REGISTER: "1024"  # %MW0    tank level 0-1000 (simulator -> PLC)
+    networks:
+      ics-net:
+        ipv4_address: 172.28.0.20
+
+  # --- HMI (stub) -----------------------------------------------------------
+  hmi:
+    build: ./hmi
+    container_name: hmi
+    restart: unless-stopped
+    depends_on: [openplc]
+    environment:
+      PLC_HOST: openplc
+      PLC_PORT: "502"
+    networks:
+      ics-net:
+        ipv4_address: 172.28.0.30
+    ports:
+      - "127.0.0.1:8000:8000"   # HMI web page
+
+  # --- Attacker (stub) ------------------------------------------------------
+  # Idle container; open a shell with: docker compose exec attacker bash
+  attacker:
+    build: ./attacker
+    container_name: attacker
+    restart: unless-stopped
+    networks:
+      ics-net:
+        ipv4_address: 172.28.0.66
+
+  # --- Detection ------------------------------------------------------------
+  # A container on a bridge only sees its own traffic, so the sensors run in
+  # the Docker host's network namespace and sniff the lab bridge (br-ics)
+  # directly. They still only listen on br-ics, nothing else.
+  suricata:
+    image: jasonish/suricata:latest   # TODO: pin a version tag
+    container_name: suricata
+    restart: unless-stopped
+    network_mode: host
+    cap_add: [NET_ADMIN, NET_RAW, SYS_NICE]
+    command: -i br-ics -S /etc/suricata/rules/local.rules
+    volumes:
+      # Not :ro - the image entrypoint chowns /etc/suricata and exits if it cannot.
+      - ./detection/suricata/rules:/etc/suricata/rules
+      - ./detection/suricata/logs:/var/log/suricata
+
+  zeek:
+    image: zeek/zeek:latest           # TODO: pin a version tag
+    container_name: zeek
+    restart: unless-stopped
+    network_mode: host
+    cap_add: [NET_ADMIN, NET_RAW]
+    working_dir: /logs                # Zeek writes its logs to the cwd
+    # -C: ignore checksums (Docker offloads them, so they look "bad" on the wire)
+    command: zeek -C -i br-ics local
+    volumes:
+      - ./detection/zeek/logs:/logs
+
+networks:
+  ics-net:
+    driver: bridge
+    driver_opts:
+      # Fixed bridge name so Suricata/Zeek know which interface to sniff.
+      com.docker.network.bridge.name: br-ics
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24   # fixed IPs make alerts and logs easier to read
+
+volumes:
+  openplc-data:
