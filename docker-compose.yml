@@ -78,7 +78,8 @@ services:
     restart: unless-stopped
     network_mode: host
     cap_add: [NET_ADMIN, NET_RAW, SYS_NICE]
-    command: -i br-ics -S /etc/suricata/rules/local.rules
+    # --set: turn the Modbus app-layer parser on so the modbus: rule keyword works.
+    command: -i br-ics -S /etc/suricata/rules/local.rules --set app-layer.protocols.modbus.enabled=yes
     volumes:
       # Not :ro - the image entrypoint chowns /etc/suricata and exits if it cannot.
       - ./detection/suricata/rules:/etc/suricata/rules
@@ -92,9 +93,10 @@ services:
     cap_add: [NET_ADMIN, NET_RAW]
     working_dir: /logs                # Zeek writes its logs to the cwd
     # -C: ignore checksums (Docker offloads them, so they look "bad" on the wire)
-    command: zeek -C -i br-ics local
+    command: zeek -C -i br-ics local /scripts/lab.zeek
     volumes:
       - ./detection/zeek/logs:/logs
+      - ./detection/zeek/scripts:/scripts:ro
 
 networks:
   ics-net:

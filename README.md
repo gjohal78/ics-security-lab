@@ -36,7 +36,7 @@ from the host network namespace (works on Linux and Docker Desktop).
 
 ## Status
 
-🚧 Scaffolding. Simulator, HMI and attacker scripts done.
+Working lab: PLC, simulator, HMI, attacker scripts, and Suricata/Zeek detection.
 
 ## License
 
