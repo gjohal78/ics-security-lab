@@ -24,3 +24,6 @@ detection/zeek/logs/*
 
 # PLC test build output
 plc/tests/.build/
+
+# Scratch output from AI assistant sessions
+Claude outputs/
