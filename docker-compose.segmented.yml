@@ -21,7 +21,6 @@ services:
   firewall:
     build: ./firewall
     image: ics-lab/firewall:local
-    container_name: fw
     restart: unless-stopped
     cap_add: [NET_ADMIN, NET_RAW]
     sysctls:
@@ -36,7 +35,6 @@ services:
     build:
       context: https://github.com/thiagoralves/OpenPLC_v3.git
     image: ics-lab/openplc:local
-    container_name: openplc
     restart: unless-stopped
     networks:
       control: { ipv4_address: 172.30.1.10 }
@@ -49,7 +47,6 @@ services:
 
   simulator:
     build: ./simulator
-    container_name: simulator
     restart: unless-stopped
     depends_on: [openplc]
     environment:
@@ -63,7 +60,6 @@ services:
   # --- Supervisory zone ---------------------------------------------------------
   hmi:
     build: ./hmi
-    container_name: hmi
     restart: unless-stopped
     depends_on: [firewall, openplc]
     # root so the zone-route entrypoint can program the route; gunicorn then
@@ -86,7 +82,6 @@ services:
   # in the firewall's logs rather than here (see docs/architecture.md).
   suricata:
     image: jasonish/suricata:latest
-    container_name: suricata
     restart: unless-stopped
     network_mode: host
     cap_add: [NET_ADMIN, NET_RAW, SYS_NICE]
@@ -97,7 +92,6 @@ services:
 
   zeek:
     image: zeek/zeek:latest
-    container_name: zeek
     restart: unless-stopped
     network_mode: host
     cap_add: [NET_ADMIN, NET_RAW]
@@ -110,7 +104,6 @@ services:
   # --- Corporate zone -----------------------------------------------------------
   attacker:
     build: ./attacker
-    container_name: attacker
     restart: unless-stopped
     depends_on: [firewall]
     cap_add: [NET_RAW, NET_ADMIN]
